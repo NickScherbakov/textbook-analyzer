@@ -1,56 +1,36 @@
 import uuid
+from sqlalchemy import Column, String, Integer, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
-class Document:
-    """Модель документа для хранения информации об учебном материале"""
+Base = declarative_base()
+
+class Document(Base):
+    __tablename__ = 'documents'
     
-    def __init__(self, filename, content, file_path=None):
-        """
-        Инициализация документа
-        
-        Args:
-            filename (str): Имя файла
-            content (str): Распознанный текст документа
-            file_path (str, optional): Путь к файлу на диске
-        """
-        self.id = str(uuid.uuid4())
-        self.filename = filename
+    id = Column(Integer, primary_key=True)
+    uuid = Column(String(36), unique=True, default=lambda: str(uuid.uuid4()))
+    title = Column(String(255), nullable=False)
+    content = Column(Text)
+    file_path = Column(String(255))
+    file_type = Column(String(50))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __init__(self, title, content=None, file_path=None, file_type=None):
+        self.title = title
         self.content = content
         self.file_path = file_path
-        self.created_at = datetime.now()
-        self.analysis_history = []
-    
-    def add_analysis(self, question=None, answer=None, explanation=None):
-        """
-        Добавление результата анализа
-        
-        Args:
-            question (str, optional): Заданный вопрос
-            answer (str, optional): Полученный ответ
-            explanation (str, optional): Объяснение материала
-        """
-        analysis = {
-            "timestamp": datetime.now(),
-            "type": "question" if question else "explanation",
-            "question": question,
-            "answer": answer,
-            "explanation": explanation
-        }
-        
-        self.analysis_history.append(analysis)
-        return analysis
+        self.file_type = file_type
     
     def to_dict(self):
-        """
-        Преобразование документа в словарь
-        
-        Returns:
-            dict: Словарь с данными документа
-        """
         return {
-            "id": self.id,
-            "filename": self.filename,
-            "content": self.content,
-            "created_at": self.created_at.isoformat(),
-            "analysis_history": self.analysis_history
+            'id': self.id,
+            'uuid': self.uuid,
+            'title': self.title,
+            'content': self.content,
+            'file_path': self.file_path,
+            'file_type': self.file_type,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

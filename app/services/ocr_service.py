@@ -33,9 +33,7 @@ def upload_file():
         try:
             # Инициализация сервисов
             ocr_service = OCRService(
-                vision_url=current_app.config['YANDEX_VISION_URL'],
-                folder_id=current_app.config['YANDEX_FOLDER_ID'],
-                iam_token=current_app.config['YANDEX_IAM_TOKEN']
+                tesseract_path=current_app.config.get('TESSERACT_PATH')
             )
             
             gpt_service = GPTService(
@@ -46,7 +44,9 @@ def upload_file():
             )
             
             # Распознавание текста
-            extracted_text = ocr_service.recognize_text(filepath)
+            with open(filepath, "rb") as image_file:
+                image_data = image_file.read()
+            extracted_text = ocr_service.process_image(image_data)
             
             # Создание документа
             document = Document(
@@ -101,80 +101,34 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
 
 
-import requests
-import base64
-import json
+import cv2
+import numpy as np
+import pytesseract
+from PIL import Image
+import io
 
 class OCRService:
-    """Сервис для распознавания текста из изображений с помощью Yandex Vision"""
-    
-    def __init__(self, vision_url, folder_id, iam_token):
-        """
-        Инициализация сервиса OCR
-        
-        Args:
-            vision_url (str): URL API Yandex Vision
-            folder_id (str): Идентификатор каталога в Yandex Cloud
-            iam_token (str): IAM-токен для авторизации
-        """
-        self.vision_url = vision_url
-        self.headers = {
-            "Authorization": f"Bearer {iam_token}",
-            "Content-Type": "application/json",
-            "x-folder-id": folder_id
-        }
-    
-    def recognize_text(self, image_path):
-        """
-        Распознавание текста из изображения
-        
-        Args:
-            image_path (str): Путь к файлу изображения
-            
-        Returns:
-            str: Распознанный текст
-        """
-        # Чтение изображения и кодирование в base64
-        with open(image_path, "rb") as image_file:
-            encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
-        
-        # Формирование запроса к API
-        payload = {
-            "folderId": self.headers["x-folder-id"],
-            "analyze_specs": [{
-                "content": encoded_image,
-                "features": [{
-                    "type": "TEXT_DETECTION",
-                    "text_detection_config": {
-                        "language_codes": ["ru", "en"]
-                    }
-                }]
-            }]
-        }
-        
-        # Отправка запроса
-        response = requests.post(self.vision_url, headers=self.headers, json=payload)
-        
-        if response.status_code != 200:
-            raise Exception(f"Ошибка при обращении к Yandex Vision: {response.text}")
-        
-        result = response.json()
-        
-        # Извлечение распознанного текста из ответа
+    def __init__(self, tesseract_path=None):
+        """Initialize OCR service with optional Tesseract path configuration."""
+        if tesseract_path:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
+    def process_image(self, image_data):
+        """Extract text from an image using OCR."""
         try:
-            # Проверяем наличие результатов распознавания
-            pages = result["results"][0]["results"][0]["textDetection"]["pages"]
-            if not pages:
-                return ""
-                
-            # Извлекаем текст из блоков
-            text = ""
-            for page in pages:
-                for block in page.get("blocks", []):
-                    for line in block.get("lines", []):
-                        for word in line.get("words", []):
-                            text += word.get("text", "") + " "
+            # Convert bytes to PIL Image
+            img = Image.open(io.BytesIO(image_data))
             
-            return text.strip()
-        except (KeyError, IndexError) as e:
-            raise Exception(f"Ошибка при обработке ответа от Yandex Vision: {str(e)}")
+            # Convert to OpenCV format
+            img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+            
+            # Preprocess the image for better OCR results
+            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+            _, binary = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+            
+            # Perform OCR
+            text = pytesseract.image_to_string(binary, lang='eng+rus')
+            return text
+        except Exception as e:
+            print(f"OCR processing error: {e}")
+            return None
