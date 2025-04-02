@@ -41,8 +41,8 @@ def upload_document():
     # Process file based on type
     if file_type in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp']:
         # For images, perform OCR
-        file.seek(0)
-        content = ocr_service.process_image(file.read())
+        with open(file_path, 'rb') as f:
+            content = ocr_service.process_image(f.read())
     elif file_type in ['.txt', '.pdf', '.docx']:
         # For text documents, add appropriate handling here
         # This is a placeholder for future implementation
