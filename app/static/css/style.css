@@ -1,0 +1,70 @@
+/* Общие стили */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+/* Стили для области загрузки файла */
+.upload-area {
+    border: 2px dashed #adb5bd;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+/* Стили для результатов анализа */
+#extractedText {
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+#explanationContent, #answerText {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Улучшения для вкладок */
+.nav-tabs .nav-link {
+    color: #495057;
+}
+
+.nav-tabs .nav-link.active {
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Responsive стили */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1.25rem;
+    }
+    
+    .upload-area {
+        padding: 2rem !important;
+    }
+    
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+}

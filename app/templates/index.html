@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+
+{% block title %}Учебный помощник - Главная{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center p-5">
+                <h1 class="mb-4">Интеллектуальный учебный помощник</h1>
+                <p class="lead">
+                    Загрузите страницу учебника, и искусственный интеллект объяснит материал простыми словами
+                </p>
+                <div class="mt-5">
+                    <form id="uploadForm" class="mb-3">
+                        <div class="mb-4">
+                            <label for="imageInput" class="form-label">
+                                <div class="upload-area p-5 border rounded-3 bg-light text-center">
+                                    <i class="bi bi-cloud-arrow-up" style="font-size: 3rem;"></i>
+                                    <h4 class="mt-3">Перетащите файл или нажмите для выбора</h4>
+                                    <p class="text-muted">Поддерживаемые форматы: PNG, JPG, JPEG, GIF, PDF</p>
+                                </div>
+                            </label>
+                            <input class="form-control d-none" type="file" id="imageInput" accept="image/*,.pdf">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg px-5">
+                            <span class="spinner-border spinner-border-sm d-none" id="uploadSpinner" role="status" aria-hidden="true"></span>
+                            Анализировать
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm mb-4" id="about">
+            <div class="card-body p-4">
+                <h2 class="card-title">О проекте</h2>
+                <p>
+                    Учебный помощник - это интеллектуальное приложение, которое помогает понять сложный учебный материал. 
+                    С помощью технологий искусственного интеллекта Yandex Cloud приложение:
+                </p>
+                <div class="row mt-4">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi bi-camera text-primary" style="font-size: 2rem;"></i>
+                                <h5 class="mt-3">Распознает текст</h5>
+                                <p class="text-muted">Извлекает текст из изображений страниц учебника</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi bi-translate text-primary" style="font-size: 2rem;"></i>
+                                <h5 class="mt-3">Объясняет материал</h5>
+                                <p class="text-muted">Преобразует сложные концепции в понятные объяснения</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi bi-chat-dots text-primary" style="font-size: 2rem;"></i>
+                                <h5 class="mt-3">Отвечает на вопросы</h5>
+                                <p class="text-muted">Помогает разобраться в непонятных моментах</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно с результатами анализа -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resultModalLabel">Результаты анализа</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="resultTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="explanation-tab" data-bs-toggle="tab" data-bs-target="#explanation" type="button" role="tab">Объяснение</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="original-tab" data-bs-toggle="tab" data-bs-target="#original" type="button" role="tab">Исходный текст</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="questions-tab" data-bs-toggle="tab" data-bs-target="#questions" type="button" role="tab">Вопросы</button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3" id="resultTabsContent">
+                    <div class="tab-pane fade show active" id="explanation" role="tabpanel">
+                        <div id="explanationContent" class="border rounded p-3 bg-light"></div>
+                    </div>
+                    <div class="tab-pane fade" id="original" role="tabpanel">
+                        <pre id="extractedText" class="border rounded p-3 bg-light"></pre>
+                    </div>
+                    <div class="tab-pane fade" id="questions" role="tabpanel">
+                        <div class="mb-3">
+                            <label for="questionInput" class="form-label">Задайте вопрос по материалу:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="questionInput" placeholder="Введите ваш вопрос...">
+                                <button class="btn btn-primary" id="askButton">
+                                    <span class="spinner-border spinner-border-sm d-none" id="questionSpinner" role="status" aria-hidden="true"></span>
+                                    Задать
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="answerContainer" class="d-none">
+                            <h5>Ответ:</h5>
+                            <div id="answerText" class="border rounded p-3 bg-light"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadForm = document.getElementById('uploadForm');
+    const imageInput = document.getElementById('imageInput');
+    const uploadSpinner = document.getElementById('uploadSpinner');
+    const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
+    const askButton = document.getElementById('askButton');
+    const questionInput = document.getElementById('questionInput');
+    const questionSpinner = document.getElementById('questionSpinner');
+    const answerContainer = document.getElementById('answerContainer');
+    const answerText = document.getElementById('answerText');
+    
+    let extractedTextContent = '';
+    
+    // Обработка события выбора файла для улучшения UX
+    imageInput.addEventListener('change', function() {
+        const fileName = this.files[0]?.name;
+        if (fileName) {
+            // Можно добавить отображение имени выбранного файла
+            console.log("Выбран файл:", fileName);
+        }
+    });
+    
+    // Обработка отправки формы
+    uploadForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('imageInput');
+        if (!fileInput.files[0]) {
+            alert('Пожалуйста, выберите файл');
+            return;
+        }
+        
+        uploadSpinner.classList.remove('d-none');
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                alert('Ошибка: ' + data.error);
+            } else {
+                document.getElementById('extractedText').textContent = data.extracted_text;
+                document.getElementById('explanationContent').innerHTML = data.explanation.replace(/\n/g, '<br>');
+                
+                // Сохраняем текст для последующих запросов
+                extractedTextContent = data.extracted_text;
+                
+                // Показываем модальное окно с результатом
+                resultModal.show();
+                
+                // Очищаем предыдущие ответы
+                answerContainer.classList.add('d-none');
+                answerText.innerHTML = '';
+            }
+        } catch (error) {
+            alert('Произошла ошибка: ' + error);
+        } finally {
+            uploadSpinner.classList.add('d-none');
+        }
+    });
+    
+    // Обработка вопросов
+    askButton.addEventListener('click', async function() {
+        const question = questionInput.value.trim();
+        if (!question) {
+            alert('Пожалуйста, введите вопрос');
+            return;
+        }
+        
+        questionSpinner.classList.remove('d-none');
+        
+        try {
+            const response = await fetch('/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: extractedTextContent,
+                    question: question
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                alert('Ошибка: ' + data.error);
+            } else {
+                answerText.innerHTML = data.answer.replace(/\n/g, '<br>');
+                answerContainer.classList.remove('d-none');
+            }
+        } catch (error) {
+            alert('Произошла ошибка: ' + error);
+        } finally {
+            questionSpinner.classList.add('d-none');
+        }
+    });
+    
+    // Поддержка нажатия Enter для отправки вопроса
+    questionInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            askButton.click();
+        }
+    });
+});
+</script>
+{% endblock %}
