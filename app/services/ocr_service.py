@@ -99,3 +99,82 @@ def allowed_file(filename):
     """Проверка допустимого расширения файла"""
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
+
+
+import requests
+import base64
+import json
+
+class OCRService:
+    """Сервис для распознавания текста из изображений с помощью Yandex Vision"""
+    
+    def __init__(self, vision_url, folder_id, iam_token):
+        """
+        Инициализация сервиса OCR
+        
+        Args:
+            vision_url (str): URL API Yandex Vision
+            folder_id (str): Идентификатор каталога в Yandex Cloud
+            iam_token (str): IAM-токен для авторизации
+        """
+        self.vision_url = vision_url
+        self.headers = {
+            "Authorization": f"Bearer {iam_token}",
+            "Content-Type": "application/json",
+            "x-folder-id": folder_id
+        }
+    
+    def recognize_text(self, image_path):
+        """
+        Распознавание текста из изображения
+        
+        Args:
+            image_path (str): Путь к файлу изображения
+            
+        Returns:
+            str: Распознанный текст
+        """
+        # Чтение изображения и кодирование в base64
+        with open(image_path, "rb") as image_file:
+            encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
+        
+        # Формирование запроса к API
+        payload = {
+            "folderId": self.headers["x-folder-id"],
+            "analyze_specs": [{
+                "content": encoded_image,
+                "features": [{
+                    "type": "TEXT_DETECTION",
+                    "text_detection_config": {
+                        "language_codes": ["ru", "en"]
+                    }
+                }]
+            }]
+        }
+        
+        # Отправка запроса
+        response = requests.post(self.vision_url, headers=self.headers, json=payload)
+        
+        if response.status_code != 200:
+            raise Exception(f"Ошибка при обращении к Yandex Vision: {response.text}")
+        
+        result = response.json()
+        
+        # Извлечение распознанного текста из ответа
+        try:
+            # Проверяем наличие результатов распознавания
+            pages = result["results"][0]["results"][0]["textDetection"]["pages"]
+            if not pages:
+                return ""
+                
+            # Извлекаем текст из блоков
+            text = ""
+            for page in pages:
+                for block in page.get("blocks", []):
+                    for line in block.get("lines", []):
+                        for word in line.get("words", []):
+                            text += word.get("text", "") + " "
+            
+            return text.strip()
+        except (KeyError, IndexError) as e:
+            raise Exception(f"Ошибка при обработке ответа от Yandex Vision: {str(e)}")
