@@ -1,7 +1,7 @@
 import io
 import os
 import uuid
-from flask import Flask, request, jsonify, send_file, render_template, Blueprint, session
+from flask import Flask, request, jsonify, send_file, render_template, Blueprint, session, current_app
 from werkzeug.utils import secure_filename
 from app.models.document import Document
 from app.services.ocr_service import OCRService
@@ -190,7 +190,7 @@ def upload_file():
             return jsonify({'error': 'Файл не выбран'}), 400
         
         # Проверяем допустимые расширения файлов
-        allowed_extensions = app.config.get('ALLOWED_EXTENSIONS', {"png", "jpg", "jpeg", "gif", "pdf"})
+        allowed_extensions = current_app.config.get('ALLOWED_EXTENSIONS', {"png", "jpg", "jpeg", "gif", "pdf"})
         
         def allowed_file(filename):
             """Проверка допустимого расширения файла"""
@@ -203,7 +203,7 @@ def upload_file():
             filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
             
             # Проверяем наличие папки для загрузки
-            upload_folder = app.config.get('UPLOAD_FOLDER')
+            upload_folder = current_app.config.get('UPLOAD_FOLDER')  # Use current_app here
             if not os.path.exists(upload_folder):
                 os.makedirs(upload_folder, exist_ok=True)
                 log_service.info(f'Создана директория для загрузки: {upload_folder}', session_id)
@@ -216,7 +216,7 @@ def upload_file():
             try:
                 # Инициализация OCR сервиса
                 log_service.info('Инициализация сервиса OCR', session_id)
-                tesseract_path = app.config.get('TESSERACT_PATH')
+                tesseract_path = current_app.config.get('TESSERACT_PATH')
                 ocr_service = OCRService(tesseract_cmd=tesseract_path)
                 
                 # Распознавание текста
@@ -241,7 +241,7 @@ def upload_file():
                 
                 # Проверка наличия необходимых конфигураций для GPT-сервиса
                 required_configs = ['YANDEX_GPT_URL', 'YANDEX_FOLDER_ID', 'YANDEX_IAM_TOKEN', 'YANDEX_GPT_MODEL']
-                missing_configs = [config for config in required_configs if not app.config.get(config)]
+                missing_configs = [config for config in required_configs if not current_app.config.get(config)]
                 
                 if missing_configs:
                     log_service.warning(f'Отсутствуют необходимые конфигурации GPT: {", ".join(missing_configs)}', session_id)
@@ -252,10 +252,10 @@ def upload_file():
                         from app.services.gpt_service import GPTService
                         log_service.info('Инициализация сервиса GPT', session_id)
                         gpt_service = GPTService(
-                            gpt_url=app.config['YANDEX_GPT_URL'],
-                            folder_id=app.config['YANDEX_FOLDER_ID'],
-                            iam_token=app.config['YANDEX_IAM_TOKEN'],
-                            model_uri=app.config['YANDEX_GPT_MODEL']
+                            gpt_url=current_app.config['YANDEX_GPT_URL'],
+                            folder_id=current_app.config['YANDEX_FOLDER_ID'],
+                            iam_token=current_app.config['YANDEX_IAM_TOKEN'],
+                            model_uri=current_app.config['YANDEX_GPT_MODEL']
                         )
                         
                         log_service.info('Запрос объяснения от YandexGPT', session_id)
@@ -303,10 +303,10 @@ def ask_question():
     try:
         from app.services.gpt_service import GPTService
         gpt_service = GPTService(
-            gpt_url=app.config['YANDEX_GPT_URL'],
-            folder_id=app.config['YANDEX_FOLDER_ID'],
-            iam_token=app.config['YANDEX_IAM_TOKEN'],
-            model_uri=app.config['YANDEX_GPT_MODEL']
+            gpt_url=current_app.config['YANDEX_GPT_URL'],
+            folder_id=current_app.config['YANDEX_FOLDER_ID'],
+            iam_token=current_app.config['YANDEX_IAM_TOKEN'],
+            model_uri=current_app.config['YANDEX_GPT_MODEL']
         )
         
         # Получаем ответ на вопрос
