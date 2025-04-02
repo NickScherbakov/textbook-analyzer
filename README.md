@@ -26,7 +26,7 @@ An application for analyzing and explaining educational materials using Yandex C
 
 1. Clone the repository
 ```bash
-git clone https://github.com/username/textbook-analyzer.git
+git clone https://github.com/NickScherbakov/textbook-analyzer.git
 cd textbook-analyzer
 ```
 
