@@ -32,6 +32,27 @@
             </div>
         </div>
         
+        <!-- Добавляем карточку логов процесса обработки -->
+        <div class="card shadow-sm mb-4" id="processingLogs">
+            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity me-2"></i>Процесс обработки
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" id="clearLogsBtn">
+                        <i class="bi bi-trash me-1"></i>Очистить
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="logMessages" class="log-container p-3">
+                    <div class="text-center text-muted my-3">
+                        <i class="bi bi-info-circle me-2"></i>Здесь будут отображаться логи обработки
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="card shadow-sm mb-4" id="about">
             <div class="card-body p-4">
                 <h2 class="card-title">О проекте</h2>
@@ -139,15 +160,67 @@ document.addEventListener('DOMContentLoaded', function() {
     const questionSpinner = document.getElementById('questionSpinner');
     const answerContainer = document.getElementById('answerContainer');
     const answerText = document.getElementById('answerText');
+    const logMessages = document.getElementById('logMessages');
+    const clearLogsBtn = document.getElementById('clearLogsBtn');
     
     let extractedTextContent = '';
+    
+    // Обработчик очистки логов
+    clearLogsBtn.addEventListener('click', function() {
+        clearLogs();
+    });
+    
+    // Функция для добавления сообщения в лог на странице
+    function addLogMessage(message, level = 'info') {
+        const logItem = document.createElement('div');
+        logItem.className = `log-message log-${level} mb-1 py-1 px-2 rounded`;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        logItem.innerHTML = `<span class="log-time">${timestamp}</span> ${message}`;
+        
+        logMessages.appendChild(logItem);
+        logMessages.scrollTop = logMessages.scrollHeight;
+    }
+    
+    // Функция для очистки логов
+    function clearLogs() {
+        logMessages.innerHTML = `
+            <div class="text-center text-muted my-3">
+                <i class="bi bi-info-circle me-2"></i>Логи очищены
+            </div>
+        `;
+        
+        fetch('/api/logs/clear', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).catch(error => console.error('Ошибка при очистке логов:', error));
+    }
+    
+    // Функция для получения обновлений логов с сервера
+    function fetchLogs() {
+        fetch('/api/logs')
+            .then(response => response.json())
+            .then(data => {
+                if (data.logs && data.logs.length > 0) {
+                    // Очищаем контейнер перед добавлением новых логов
+                    logMessages.innerHTML = '';
+                    
+                    // Добавляем каждый лог
+                    data.logs.forEach(log => {
+                        addLogMessage(log.message, log.level.toLowerCase());
+                    });
+                }
+            })
+            .catch(error => console.error('Ошибка при получении логов:', error));
+    }
     
     // Обработка события выбора файла для улучшения UX
     imageInput.addEventListener('change', function() {
         const fileName = this.files[0]?.name;
         if (fileName) {
-            // Можно добавить отображение имени выбранного файла
-            console.log("Выбран файл:", fileName);
+            addLogMessage(`Выбран файл: ${fileName}`, 'info');
         }
     });
     
@@ -157,26 +230,31 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const fileInput = document.getElementById('imageInput');
         if (!fileInput.files[0]) {
-            alert('Пожалуйста, выберите файл');
+            addLogMessage('Пожалуйста, выберите файл', 'error');
             return;
         }
         
         uploadSpinner.classList.remove('d-none');
+        addLogMessage('Начало загрузки файла...', 'info');
         
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
         
         try {
+            addLogMessage('Отправка файла на сервер...', 'info');
             const response = await fetch('/upload', {
                 method: 'POST',
                 body: formData
             });
             
+            addLogMessage('Файл загружен, обработка результатов...', 'info');
             const data = await response.json();
             
             if (data.error) {
+                addLogMessage(`Ошибка: ${data.error}`, 'error');
                 alert('Ошибка: ' + data.error);
             } else {
+                addLogMessage('Текст успешно распознан', 'success');
                 document.getElementById('extractedText').textContent = data.extracted_text;
                 document.getElementById('explanationContent').innerHTML = data.explanation.replace(/\n/g, '<br>');
                 
@@ -184,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 extractedTextContent = data.extracted_text;
                 
                 // Показываем модальное окно с результатом
+                addLogMessage('Отображение результатов анализа', 'success');
                 resultModal.show();
                 
                 // Очищаем предыдущие ответы
@@ -191,9 +270,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 answerText.innerHTML = '';
             }
         } catch (error) {
+            addLogMessage(`Произошла ошибка: ${error}`, 'error');
             alert('Произошла ошибка: ' + error);
         } finally {
             uploadSpinner.classList.add('d-none');
+            addLogMessage('Обработка завершена', 'info');
         }
     });
     
@@ -201,11 +282,13 @@ document.addEventListener('DOMContentLoaded', function() {
     askButton.addEventListener('click', async function() {
         const question = questionInput.value.trim();
         if (!question) {
+            addLogMessage('Пожалуйста, введите вопрос', 'warning');
             alert('Пожалуйста, введите вопрос');
             return;
         }
         
         questionSpinner.classList.remove('d-none');
+        addLogMessage(`Обработка вопроса: "${question}"`, 'info');
         
         try {
             const response = await fetch('/ask', {
@@ -219,15 +302,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             });
             
+            addLogMessage('Получен ответ от ИИ', 'info');
             const data = await response.json();
             
             if (data.error) {
+                addLogMessage(`Ошибка: ${data.error}`, 'error');
                 alert('Ошибка: ' + data.error);
             } else {
+                addLogMessage('Ответ успешно сформирован', 'success');
                 answerText.innerHTML = data.answer.replace(/\n/g, '<br>');
                 answerContainer.classList.remove('d-none');
             }
         } catch (error) {
+            addLogMessage(`Ошибка при получении ответа: ${error}`, 'error');
             alert('Произошла ошибка: ' + error);
         } finally {
             questionSpinner.classList.add('d-none');
@@ -240,6 +327,10 @@ document.addEventListener('DOMContentLoaded', function() {
             askButton.click();
         }
     });
+    
+    // Запрашиваем логи при загрузке страницы и запускаем периодическое обновление
+    fetchLogs();
+    setInterval(fetchLogs, 2000); // Обновлять логи каждые 2 секунды
 });
 </script>
 {% endblock %}

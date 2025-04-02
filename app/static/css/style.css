@@ -44,6 +44,50 @@ main {
     color: #0d6efd;
 }
 
+/* Стили для логов */
+.log-container {
+    height: 200px;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+    font-family: "Consolas", monospace;
+    font-size: 0.9rem;
+}
+
+.log-message {
+    padding: 2px 5px;
+    border-left: 3px solid #ccc;
+    transition: all 0.2s ease;
+}
+
+.log-message:hover {
+    background-color: rgba(0,0,0,0.05);
+}
+
+.log-time {
+    color: #666;
+    font-size: 0.8rem;
+    margin-right: 5px;
+}
+
+.log-info {
+    border-left-color: #0d6efd;
+}
+
+.log-success {
+    border-left-color: #198754;
+    background-color: rgba(25, 135, 84, 0.05);
+}
+
+.log-warning {
+    border-left-color: #ffc107;
+    background-color: rgba(255, 193, 7, 0.05);
+}
+
+.log-error {
+    border-left-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.05);
+}
+
 /* Анимации */
 @keyframes fadeIn {
     from { opacity: 0; }

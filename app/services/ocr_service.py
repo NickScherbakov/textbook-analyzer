@@ -127,21 +127,48 @@ class OCRService:
         self.logger = logging.getLogger(__name__)
     
     def process_image(self, image_data):
+        """
+        Обрабатывает изображение и распознает текст
+        
+        Args:
+            image_data (bytes): Бинарные данные изображения
+            
+        Returns:
+            str: Распознанный текст
+        """
         try:
-            # Convert to OpenCV format
+            # Преобразуем байты в объект Image
             img = Image.open(io.BytesIO(image_data))
+            
+            # Конвертируем в формат OpenCV
             img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             
-            # Preprocess the image for better OCR results
+            # Предобработка изображения для лучшего распознавания
+            self.logger.info("Предобработка изображения для OCR")
             gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            _, binary = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
             
-            # Perform OCR
-            text = pytesseract.image_to_string(binary, lang='eng+rus')
+            # Применяем адаптивное пороговое значение для улучшения контраста
+            # для документов и печатного текста
+            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                          cv2.THRESH_BINARY, 11, 2)
+            
+            # Распознаем текст с поддержкой русского и английского языков
+            self.logger.info("Выполнение OCR с pytesseract")
+            text = pytesseract.image_to_string(binary, lang='rus+eng')
+            
+            # Проверка результата
+            if not text or len(text.strip()) < 10:
+                self.logger.warning("OCR дал короткий или пустой результат, повторная попытка с оригинальным изображением")
+                # Если результат плохой, попробуем с оригинальным изображением
+                text = pytesseract.image_to_string(img, lang='rus+eng')
+            
+            self.logger.info(f"OCR завершен, извлечено символов: {len(text)}")
             return text
         
         except Exception as e:
-            print(f"OCR processing error: {e}")
+            self.logger.error(f"Ошибка при обработке OCR: {e}")
+            import traceback
+            self.logger.error(f"Стек ошибки: {traceback.format_exc()}")
             return None
 
     def some_method_with_cyclic_dependency(self, param):
