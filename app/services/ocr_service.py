@@ -3,7 +3,6 @@ import os
 import uuid
 from werkzeug.utils import secure_filename
 
-from app.services.ocr_service import OCRService
 from app.services.gpt_service import GPTService
 from app.models.document import Document
 
@@ -67,10 +66,7 @@ def upload_file():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
         finally:
-            # Удаляем временный файл, если не нужно сохранять
-            # Раскомментировать, если файлы не нужно хранить
-            # if os.path.exists(filepath):
-            #    os.remove(filepath)
+            pass  # Добавляем инструкцию pass, если блок был пустым
     else:
         return jsonify({'error': 'Недопустимый формат файла'}), 400
 
@@ -101,25 +97,38 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
 
 
+import os
 import cv2
 import numpy as np
+from pdf2image import convert_from_path
 import pytesseract
 from PIL import Image
-import io
+import logging
+from typing import List, Dict, Any, Optional
 
 class OCRService:
-    def __init__(self, tesseract_path=None):
-        """Initialize OCR service with optional Tesseract path configuration."""
-        if tesseract_path:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-
+    """
+    Сервис для распознавания текста из изображений и PDF файлов
+    """
+    
+    def __init__(self, tesseract_cmd: str = None):
+        """
+        Инициализирует сервис OCR
+        
+        Args:
+            tesseract_cmd: Путь к исполняемому файлу Tesseract
+        """
+        # Настройка пути к Tesseract, если он предоставлен
+        if tesseract_cmd:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        
+        # Настройка логирования
+        self.logger = logging.getLogger(__name__)
+    
     def process_image(self, image_data):
-        """Extract text from an image using OCR."""
         try:
-            # Convert bytes to PIL Image
-            img = Image.open(io.BytesIO(image_data))
-            
             # Convert to OpenCV format
+            img = Image.open(io.BytesIO(image_data))
             img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             
             # Preprocess the image for better OCR results
@@ -129,6 +138,14 @@ class OCRService:
             # Perform OCR
             text = pytesseract.image_to_string(binary, lang='eng+rus')
             return text
+        
         except Exception as e:
             print(f"OCR processing error: {e}")
             return None
+
+    def some_method_with_cyclic_dependency(self, param):
+        # Импортируем зависимость только внутри метода
+        from app.services.some_other_service import SomeOtherService
+        
+        other_service = SomeOtherService()
+        # использование other_service
