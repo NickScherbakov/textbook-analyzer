@@ -4,19 +4,22 @@ import json
 import os
 from pathlib import Path
 from typing import List, Dict, Any
+import logging
+from app.utils.token_manager import get_token
 
 class OCRService:
-    def __init__(self, folder_id: str, iam_token: str):
+    def __init__(self, folder_id: str, iam_token: str = None):
         """
         Инициализация сервиса OCR.
         
         Args:
             folder_id: Идентификатор каталога в Яндекс.Облаке
-            iam_token: IAM-токен для аутентификации
+            iam_token: IAM-токен для аутентификации (опционально, если не указан, токен будет получен из менеджера токенов)
         """
         self.folder_id = folder_id
-        self.iam_token = iam_token
+        self.iam_token = iam_token or get_token()  # Получаем токен из менеджера, если не передан
         self.vision_url = 'https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze'
+        self.logger = logging.getLogger(__name__)
         
     @staticmethod
     def get_iam_token(oauth_token: str) -> str:
@@ -38,7 +41,16 @@ class OCRService:
         if response.status_code == 200:
             return response.json().get('iamToken')
         else:
-            raise Exception(f'Ошибка получения IAM-токена: {response.status_code} - {response.text}')
+            error_message = f'Ошибка получения IAM-токена: {response.status_code} - {response.text}'
+            logging.error(error_message)
+            raise Exception(error_message)
+    
+    def refresh_token(self):
+        """
+        Обновляет IAM-токен через менеджер токенов
+        """
+        self.iam_token = get_token(force_refresh=True)
+        self.logger.info("IAM-токен для OCR обновлен")
     
     def recognize_file(self, file_path: str) -> str:
         """
@@ -55,6 +67,18 @@ class OCRService:
             image_content = base64.b64encode(image_file.read()).decode('utf-8')
         
         return self._perform_recognition(image_content)
+    
+    def process_image(self, image_bytes: bytes) -> str:
+        """
+        Обрабатывает изображение для распознавания текста.
+        
+        Args:
+            image_bytes: Байты изображения
+            
+        Returns:
+            Распознанный текст
+        """
+        return self.recognize_bytes(image_bytes)
     
     def recognize_bytes(self, image_bytes: bytes) -> str:
         """
@@ -106,9 +130,26 @@ class OCRService:
         
         if response.status_code == 200:
             return self._extract_text_from_response(response.json())
+        elif response.status_code == 401:
+            # Если 401 (Unauthorized), пробуем обновить токен и повторить запрос
+            self.logger.warning("Токен истек. Пробуем обновить и повторить запрос")
+            self.refresh_token()
+            
+            # Обновляем заголовки с новым токеном
+            headers['Authorization'] = f'Bearer {self.iam_token}'
+            
+            # Повторяем запрос
+            retry_response = requests.post(self.vision_url, headers=headers, json=body)
+            
+            if retry_response.status_code == 200:
+                return self._extract_text_from_response(retry_response.json())
+            else:
+                error_msg = f'Ошибка распознавания после обновления токена: {retry_response.status_code} - {retry_response.text}'
+                self.logger.error(error_msg)
+                return error_msg
         else:
             error_msg = f'Ошибка распознавания: {response.status_code} - {response.text}'
-            print(error_msg)
+            self.logger.error(error_msg)
             return error_msg
     
     def _extract_text_from_response(self, response_json: Dict[str, Any]) -> str:
@@ -131,15 +172,7 @@ class OCRService:
                             full_text += word.get('text', '') + ' '
             return full_text.strip()
         except (KeyError, IndexError) as e:
-            print(f"Ошибка при извлечении текста из ответа: {e}")
-            print(f"Ответ API: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
+            error_msg = f"Ошибка при извлечении текста из ответа: {e}"
+            self.logger.error(error_msg)
+            self.logger.debug(f"Ответ API: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
             return ''
-
-# Пример использования:
-# oauth_token = os.environ.get('YANDEX_OAUTH_TOKEN')
-# folder_id = os.environ.get('YANDEX_FOLDER_ID')
-# iam_token = OCRService.get_iam_token(oauth_token)
-# 
-# ocr_service = OCRService(folder_id, iam_token)
-# text = ocr_service.recognize_file('path/to/image.jpg')
-# print(text)

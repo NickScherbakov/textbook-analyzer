@@ -16,12 +16,27 @@ app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
 app.config['SECRET_KEY'] = Config.SECRET_KEY
 
 # Initialize services
-ocr_service = OCRService(Config.TESSERACT_PATH, Config.IAM_TOKEN)
 file_service = FileService()
 log_service = LogService()
 
 # Initialize database
 init_db()
+
+# Function to get fresh OCR service with valid token
+def get_ocr_service():
+    try:
+        oauth_token = os.environ.get('YANDEX_OAUTH_TOKEN')
+        if not oauth_token:
+            log_service.error('YANDEX_OAUTH_TOKEN не настроен в переменных окружения')
+            raise ValueError("YANDEX_OAUTH_TOKEN не настроен")
+        
+        # Generate a fresh IAM token using OAuth token
+        iam_token = OCRService.get_iam_token(oauth_token)
+        # Return a new OCR service instance with the fresh token
+        return OCRService(Config.YANDEX_FOLDER_ID, iam_token)
+    except Exception as e:
+        log_service.error(f'Ошибка при получении IAM токена: {str(e)}')
+        raise
 
 @app.before_request
 def create_session():
@@ -62,11 +77,17 @@ def upload_document():
     
     # Process file based on type
     if file_type in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp']:
-        # For images, perform OCR
+        # For images, perform OCR with fresh token
         log_service.info('Начало OCR обработки изображения', session_id)
-        with open(file_path, 'rb') as f:
-            content = ocr_service.process_image(f.read())
-        log_service.success('OCR обработка завершена успешно', session_id)
+        try:
+            # Get a fresh OCR service instance
+            ocr_service = get_ocr_service()
+            with open(file_path, 'rb') as f:
+                content = ocr_service.process_image(f.read())
+            log_service.success('OCR обработка завершена успешно', session_id)
+        except Exception as e:
+            log_service.error(f'Ошибка OCR обработки: {str(e)}', session_id)
+            return jsonify({'error': f'OCR error: {str(e)}'}), 500
     elif file_type in ['.txt', '.pdf', '.docx']:
         # For text documents, add appropriate handling here
         log_service.info('Извлечение текста из документа', session_id)
@@ -214,10 +235,13 @@ def upload_file():
             log_service.success(f'Файл сохранен: {filepath}', session_id)
             
             try:
-                # Инициализация OCR сервиса
+                # Инициализация OCR сервиса с новым токеном
                 log_service.info('Инициализация сервиса OCR', session_id)
-                tesseract_path = current_app.config.get('TESSERACT_PATH')
-                ocr_service = OCRService(tesseract_cmd=tesseract_path)
+                try:
+                    ocr_service = get_ocr_service()
+                except Exception as token_error:
+                    log_service.error(f'Ошибка при получении IAM токена: {str(token_error)}', session_id)
+                    return jsonify({'error': f'Ошибка аутентификации: {str(token_error)}'}), 401
                 
                 # Распознавание текста
                 log_service.info('Начало распознавания текста (OCR)', session_id)
