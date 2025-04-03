@@ -16,7 +16,7 @@ app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
 app.config['SECRET_KEY'] = Config.SECRET_KEY
 
 # Initialize services
-ocr_service = OCRService(Config.TESSERACT_PATH)
+ocr_service = OCRService(Config.TESSERACT_PATH, Config.IAM_TOKEN)
 file_service = FileService()
 log_service = LogService()
 

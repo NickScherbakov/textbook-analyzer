@@ -18,3 +18,6 @@ class Config:
     
     # OCR configuration
     TESSERACT_PATH = os.environ.get('TESSERACT_PATH', None)
+    
+    # IAM Token
+    IAM_TOKEN = "your-iam-token-here"  # Replace with the actual token or environment variable
