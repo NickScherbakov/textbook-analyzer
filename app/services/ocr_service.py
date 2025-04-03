@@ -134,3 +134,12 @@ class OCRService:
             print(f"Ошибка при извлечении текста из ответа: {e}")
             print(f"Ответ API: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
             return ''
+
+# Пример использования:
+# oauth_token = os.environ.get('YANDEX_OAUTH_TOKEN')
+# folder_id = os.environ.get('YANDEX_FOLDER_ID')
+# iam_token = OCRService.get_iam_token(oauth_token)
+# 
+# ocr_service = OCRService(folder_id, iam_token)
+# text = ocr_service.recognize_file('path/to/image.jpg')
+# print(text)
