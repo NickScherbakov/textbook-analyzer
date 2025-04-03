@@ -1,179 +1,136 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+import base64
+import requests
+import json
 import os
-import uuid
-from werkzeug.utils import secure_filename
-
-from app.services.gpt_service import GPTService
-from app.models.document import Document
-
-main_bp = Blueprint('main', __name__)
-
-@main_bp.route('/')
-def index():
-    """Главная страница"""
-    return render_template('index.html')
-
-@main_bp.route('/upload', methods=['POST'])
-def upload_file():
-    """Обработка загруженного файла"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'Файл не найден'}), 400
-    
-    file = request.files['file']
-    
-    if file.filename == '':
-        return jsonify({'error': 'Файл не выбран'}), 400
-    
-    if file and allowed_file(file.filename):
-        filename = secure_filename(f"{uuid.uuid4()}_{file.filename}")
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
-        try:
-            # Инициализация сервисов
-            ocr_service = OCRService(
-                tesseract_path=current_app.config.get('TESSERACT_PATH')
-            )
-            
-            gpt_service = GPTService(
-                gpt_url=current_app.config['YANDEX_GPT_URL'],
-                folder_id=current_app.config['YANDEX_FOLDER_ID'],
-                iam_token=current_app.config['YANDEX_IAM_TOKEN'],
-                model_uri=current_app.config['YANDEX_GPT_MODEL']
-            )
-            
-            # Распознавание текста
-            with open(filepath, "rb") as image_file:
-                image_data = image_file.read()
-            extracted_text = ocr_service.process_image(image_data)
-            
-            # Создание документа
-            document = Document(
-                filename=filename,
-                content=extracted_text,
-                file_path=filepath
-            )
-            
-            # Генерация объяснения
-            explanation = gpt_service.explain_content(extracted_text)
-            
-            return jsonify({
-                'status': 'success',
-                'extracted_text': extracted_text,
-                'explanation': explanation,
-                'document_id': document.id
-            })
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-        finally:
-            pass  # Добавляем инструкцию pass, если блок был пустым
-    else:
-        return jsonify({'error': 'Недопустимый формат файла'}), 400
-
-@main_bp.route('/ask', methods=['POST'])
-def ask_question():
-    """Обработка вопроса по содержанию"""
-    data = request.json
-    if not data or 'text' not in data or 'question' not in data:
-        return jsonify({'error': 'Необходимо предоставить текст и вопрос'}), 400
-    
-    try:
-        gpt_service = GPTService(
-            gpt_url=current_app.config['YANDEX_GPT_URL'],
-            folder_id=current_app.config['YANDEX_FOLDER_ID'],
-            iam_token=current_app.config['YANDEX_IAM_TOKEN'],
-            model_uri=current_app.config['YANDEX_GPT_MODEL']
-        )
-        
-        # Получаем ответ на вопрос
-        answer = gpt_service.answer_question(data['text'], data['question'])
-        return jsonify({'answer': answer})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-def allowed_file(filename):
-    """Проверка допустимого расширения файла"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']
-
-
-import os
-import io  # Добавляем импорт модуля io
-import cv2
-import numpy as np
-from pdf2image import convert_from_path
-import pytesseract
-from PIL import Image
-import logging
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import List, Dict, Any
 
 class OCRService:
-    """
-    Сервис для распознавания текста из изображений и PDF файлов
-    """
-    
-    def __init__(self, tesseract_cmd: str = None):
+    def __init__(self, folder_id: str, iam_token: str):
         """
-        Инициализирует сервис OCR
+        Инициализация сервиса OCR.
         
         Args:
-            tesseract_cmd: Путь к исполняемому файлу Tesseract
+            folder_id: Идентификатор каталога в Яндекс.Облаке
+            iam_token: IAM-токен для аутентификации
         """
-        # Настройка пути к Tesseract, если он предоставлен
-        if tesseract_cmd:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        self.folder_id = folder_id
+        self.iam_token = iam_token
+        self.vision_url = 'https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze'
         
-        # Настройка логирования
-        self.logger = logging.getLogger(__name__)
-    
-    def process_image(self, image_data):
+    @staticmethod
+    def get_iam_token(oauth_token: str) -> str:
         """
-        Обрабатывает изображение и распознает текст
+        Получение IAM-токена по OAuth-токену.
         
         Args:
-            image_data (bytes): Бинарные данные изображения
+            oauth_token: OAuth-токен Яндекс.Паспорта
             
         Returns:
-            str: Распознанный текст
+            IAM-токен
+        """
+        url = 'https://iam.api.cloud.yandex.net/iam/v1/tokens'
+        response = requests.post(
+            url,
+            json={'yandexPassportOauthToken': oauth_token}
+        )
+        
+        if response.status_code == 200:
+            return response.json().get('iamToken')
+        else:
+            raise Exception(f'Ошибка получения IAM-токена: {response.status_code} - {response.text}')
+    
+    def recognize_file(self, file_path: str) -> str:
+        """
+        Распознает текст из файла изображения.
+        
+        Args:
+            file_path: Путь к файлу изображения
+            
+        Returns:
+            Распознанный текст
+        """
+        # Чтение и кодирование изображения
+        with open(file_path, 'rb') as image_file:
+            image_content = base64.b64encode(image_file.read()).decode('utf-8')
+        
+        return self._perform_recognition(image_content)
+    
+    def recognize_bytes(self, image_bytes: bytes) -> str:
+        """
+        Распознает текст из байтов изображения.
+        
+        Args:
+            image_bytes: Байты изображения
+            
+        Returns:
+            Распознанный текст
+        """
+        image_content = base64.b64encode(image_bytes).decode('utf-8')
+        return self._perform_recognition(image_content)
+    
+    def _perform_recognition(self, image_content: str) -> str:
+        """
+        Выполняет запрос к API распознавания.
+        
+        Args:
+            image_content: Закодированное в base64 содержимое изображения
+            
+        Returns:
+            Распознанный текст
+        """
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {self.iam_token}'
+        }
+        
+        body = {
+            'folderId': self.folder_id,
+            'analyzeSpecs': [
+                {
+                    'content': image_content,
+                    'features': [
+                        {
+                            'type': 'TEXT_DETECTION',
+                            'textDetectionConfig': {
+                                'languageCodes': ['ru', 'en'],
+                                'model': 'page'
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        response = requests.post(self.vision_url, headers=headers, json=body)
+        
+        if response.status_code == 200:
+            return self._extract_text_from_response(response.json())
+        else:
+            error_msg = f'Ошибка распознавания: {response.status_code} - {response.text}'
+            print(error_msg)
+            return error_msg
+    
+    def _extract_text_from_response(self, response_json: Dict[str, Any]) -> str:
+        """
+        Извлекает текст из ответа API.
+        
+        Args:
+            response_json: JSON-ответ от API
+            
+        Returns:
+            Извлеченный текст
         """
         try:
-            # Преобразуем байты в объект Image
-            img = Image.open(io.BytesIO(image_data))
-            
-            # Конвертируем в формат OpenCV
-            img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-            
-            # Предобработка изображения для лучшего распознавания
-            self.logger.info("Предобработка изображения для OCR")
-            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            
-            # Применяем адаптивное пороговое значение для улучшения контраста
-            # для документов и печатного текста
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                          cv2.THRESH_BINARY, 11, 2)
-            
-            # Распознаем текст с поддержкой русского и английского языков
-            self.logger.info("Выполнение OCR с pytesseract")
-            text = pytesseract.image_to_string(binary, lang='rus+eng')
-            
-            # Проверка результата
-            if not text or len(text.strip()) < 10:
-                self.logger.warning("OCR дал короткий или пустой результат, повторная попытка с оригинальным изображением")
-                # Если результат плохой, попробуем с оригинальным изображением
-                text = pytesseract.image_to_string(img, lang='rus+eng')
-            
-            self.logger.info(f"OCR завершен, извлечено символов: {len(text)}")
-            return text
-        
-        except Exception as e:
-            self.logger.error(f"Ошибка при обработке OCR: {e}")
-            import traceback
-            self.logger.error(f"Стек ошибки: {traceback.format_exc()}")
-            return None
-
-    def some_method_with_cyclic_dependency(self, param):
-        # Импортируем зависимость только внутри метода
-        from app.services.some_other_service import SomeOtherService
-        
-        other_service = SomeOtherService()
-        # использование other_service
+            text_results = response_json['results'][0]['results'][0]['textDetection']['pages']
+            full_text = ''
+            for page in text_results:
+                for block in page.get('blocks', []):
+                    for line in block.get('lines', []):
+                        for word in line.get('words', []):
+                            full_text += word.get('text', '') + ' '
+            return full_text.strip()
+        except (KeyError, IndexError) as e:
+            print(f"Ошибка при извлечении текста из ответа: {e}")
+            print(f"Ответ API: {json.dumps(response_json, indent=2, ensure_ascii=False)}")
+            return ''
