@@ -19,7 +19,7 @@ class Config:
     YANDEX_FOLDER_ID = os.environ.get("YANDEX_FOLDER_ID")
     YANDEX_VISION_URL = "https://vision.api.cloud.yandex.net/vision/v1/batchAnalyze"
     YANDEX_GPT_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-    YANDEX_GPT_MODEL = "gpt://b1gvmob95yysaplct532/yandexgpt-lite"
+    YANDEX_GPT_MODEL = "gpt://"+YANDEX_FOLDER_ID+"/yandexgpt-lite"
     
     # Формат файлов, которые можно загружать
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "pdf"}
